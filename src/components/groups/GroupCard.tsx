@@ -1,10 +1,7 @@
 "use client";
-// =============================================
-// グループカード
-// メンバー一覧と今月のスタンプ進捗を表示
-// =============================================
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { leaveGroup } from "@/app/(dashboard)/groups/actions";
 
 type MemberProgress = {
@@ -61,13 +58,21 @@ export default function GroupCard({
             <h2 className="font-bold text-gray-800 text-lg">{groupName}</h2>
             <p className="text-xs text-gray-400 mt-0.5">{members.length}人のメンバー</p>
           </div>
-          <button
-            onClick={handleLeave}
-            disabled={isLeaving}
-            className="text-xs text-gray-400 hover:text-red-400 transition-colors px-2 py-1"
-          >
-            退出
-          </button>
+          <div className="flex items-center gap-1">
+            <Link
+              href={`/groups/${groupId}`}
+              className="text-xs text-orange-500 hover:text-orange-600 font-medium px-2 py-1 rounded-lg hover:bg-orange-50 transition-colors"
+            >
+              詳細 ›
+            </Link>
+            <button
+              onClick={handleLeave}
+              disabled={isLeaving}
+              className="text-xs text-gray-400 hover:text-red-400 transition-colors px-2 py-1"
+            >
+              退出
+            </button>
+          </div>
         </div>
 
         {/* 招待コード */}

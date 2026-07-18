@@ -63,7 +63,7 @@ export default async function HistoryPage({ searchParams }: Props) {
       </div>
 
       {/* 月ナビゲーター */}
-      <HistoryMonthSelector value={targetMonth} currentMonth={currentMonth} />
+      <HistoryMonthSelector value={targetMonth} currentMonth={currentMonth} basePath="/history" />
 
       {/* 月のサマリーカード */}
       {goals && goals.length > 0 && (
