@@ -1,7 +1,5 @@
-// グループ詳細ページ：1メンバー分の目標とスタンプを表示するセクション
-// サーバーコンポーネント（読み取り専用）
-import HistoryGoalCard from "@/components/history/HistoryGoalCard";
-import type { Goal, Achievement } from "@/types/database";
+import GroupGoalCard from "@/components/groups/GroupGoalCard";
+import type { Goal, Achievement, Reaction } from "@/types/database";
 
 type GoalWithAchievements = Goal & { achievements: Achievement[] };
 
@@ -12,6 +10,8 @@ type Props = {
   goals: GoalWithAchievements[];
   totalStamps: number;
   achievedToday: boolean;
+  reactions: Reaction[];
+  currentUserId: string;
 };
 
 export default function MemberGoalsSection({
@@ -20,6 +20,8 @@ export default function MemberGoalsSection({
   goals,
   totalStamps,
   achievedToday,
+  reactions,
+  currentUserId,
 }: Props) {
   const totalDays = goals.length > 0
     ? (() => {
@@ -61,18 +63,28 @@ export default function MemberGoalsSection({
 
       {/* 目標カード一覧 */}
       {goals.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm p-4 text-center text-gray-400 text-sm ml-0">
+        <div className="bg-white rounded-2xl shadow-sm p-4 text-center text-gray-400 text-sm">
           この月の目標はありません
         </div>
       ) : (
         <div className="space-y-3">
-          {goals.map((goal) => (
-            <HistoryGoalCard
-              key={goal.id}
-              goal={goal}
-              achievements={goal.achievements}
-            />
-          ))}
+          {goals.map((goal) => {
+            // このゴールの達成記録 ID に絞ったリアクション
+            const achievementIds = new Set(goal.achievements.map((a) => a.id));
+            const goalReactions = reactions.filter((r) =>
+              achievementIds.has(r.achievement_id)
+            );
+            return (
+              <GroupGoalCard
+                key={goal.id}
+                goal={goal}
+                achievements={goal.achievements}
+                reactions={goalReactions}
+                currentUserId={currentUserId}
+                isMe={isMe}
+              />
+            );
+          })}
         </div>
       )}
     </div>

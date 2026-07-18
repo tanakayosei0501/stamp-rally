@@ -8,7 +8,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import HistoryMonthSelector from "@/components/history/HistoryMonthSelector";
 import MemberGoalsSection from "@/components/groups/MemberGoalsSection";
-import type { Achievement } from "@/types/database";
+import type { Achievement, Reaction } from "@/types/database";
 
 type Props = {
   params: Promise<{ groupId: string }>;
@@ -56,6 +56,15 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     .eq("target_month", targetMonth)
     .in("user_id", memberIds)
     .order("created_at");
+
+  // リアクションを取得
+  const allAchievements = (allGoals ?? []).flatMap(
+    (g) => (g.achievements as Achievement[]).filter((a) => a.achieved)
+  );
+  const achievementIds = allAchievements.map((a) => a.id);
+  const { data: allReactions } = achievementIds.length > 0
+    ? await supabase.from("reactions").select("*").in("achievement_id", achievementIds)
+    : { data: [] as Reaction[] };
 
   // userId → goals のマップを作成
   const goalsByUser = new Map<string, { goals: typeof allGoals; stamps: number; achievedToday: boolean }>();
@@ -125,6 +134,8 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
               }))}
               totalStamps={data.stamps}
               achievedToday={data.achievedToday}
+              reactions={(allReactions as Reaction[]) ?? []}
+              currentUserId={user.id}
             />
           );
         })}
