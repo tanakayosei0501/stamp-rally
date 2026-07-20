@@ -1,4 +1,4 @@
-import GroupGoalCard from "@/components/groups/GroupGoalCard";
+import GroupGoalCard, { type CommentWithProfile } from "@/components/groups/GroupGoalCard";
 import type { Goal, Achievement, Reaction } from "@/types/database";
 
 type GoalWithAchievements = Goal & { achievements: Achievement[] };
@@ -11,6 +11,7 @@ type Props = {
   totalStamps: number;
   achievedToday: boolean;
   reactions: Reaction[];
+  comments: CommentWithProfile[];
   currentUserId: string;
 };
 
@@ -21,6 +22,7 @@ export default function MemberGoalsSection({
   totalStamps,
   achievedToday,
   reactions,
+  comments,
   currentUserId,
 }: Props) {
   const totalDays = goals.length > 0
@@ -74,12 +76,16 @@ export default function MemberGoalsSection({
             const goalReactions = reactions.filter((r) =>
               achievementIds.has(r.achievement_id)
             );
+            const goalComments = comments.filter((c) =>
+              achievementIds.has(c.achievement_id)
+            );
             return (
               <GroupGoalCard
                 key={goal.id}
                 goal={goal}
                 achievements={goal.achievements}
                 reactions={goalReactions}
+                comments={goalComments}
                 currentUserId={currentUserId}
                 isMe={isMe}
               />

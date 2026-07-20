@@ -8,7 +8,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import HistoryMonthSelector from "@/components/history/HistoryMonthSelector";
 import MemberGoalsSection from "@/components/groups/MemberGoalsSection";
-import type { Achievement, Reaction } from "@/types/database";
+import type { Achievement, Reaction, Comment } from "@/types/database";
+import type { CommentWithProfile } from "@/components/groups/GroupGoalCard";
 
 type Props = {
   params: Promise<{ groupId: string }>;
@@ -65,6 +66,27 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
   const { data: allReactions } = achievementIds.length > 0
     ? await supabase.from("reactions").select("*").in("achievement_id", achievementIds)
     : { data: [] as Reaction[] };
+
+  // コメントをプロフィール付きで取得
+  const { data: rawComments } = achievementIds.length > 0
+    ? await supabase
+        .from("comments")
+        .select("*, profiles(display_name)")
+        .in("achievement_id", achievementIds)
+        .order("created_at")
+    : { data: [] };
+
+  const allComments: CommentWithProfile[] = (rawComments ?? []).map((c) => {
+    const profile = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
+    return {
+      id: c.id,
+      achievement_id: c.achievement_id,
+      user_id: c.user_id,
+      body: c.body,
+      created_at: c.created_at,
+      display_name: (profile as { display_name: string } | null)?.display_name ?? "?",
+    } satisfies CommentWithProfile;
+  });
 
   // userId → goals のマップを作成
   const goalsByUser = new Map<string, { goals: typeof allGoals; stamps: number; achievedToday: boolean }>();
@@ -135,6 +157,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
               totalStamps={data.stamps}
               achievedToday={data.achievedToday}
               reactions={(allReactions as Reaction[]) ?? []}
+              comments={allComments}
               currentUserId={user.id}
             />
           );

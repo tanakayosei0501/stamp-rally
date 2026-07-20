@@ -53,6 +53,14 @@ export type Reaction = {
   created_at: string;
 };
 
+export type Comment = {
+  id: string;
+  achievement_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+};
+
 // 画面表示に便利な結合型
 export type GoalWithAchievements = Goal & {
   achievements: Achievement[];

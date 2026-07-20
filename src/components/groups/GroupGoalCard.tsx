@@ -3,7 +3,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORIES } from "@/lib/categories";
 import { toggleReaction } from "@/app/(dashboard)/groups/[groupId]/actions";
-import type { Goal, Achievement, Reaction } from "@/types/database";
+import CommentThread from "@/components/groups/CommentThread";
+import type { Goal, Achievement, Reaction, Comment } from "@/types/database";
 
 const REACTION_TYPES = [
   { type: "clap",   emoji: "👏", label: "すごい！" },
@@ -25,10 +26,13 @@ function calcMaxStreak(dates: string[]): number {
   return max;
 }
 
+export type CommentWithProfile = Comment & { display_name: string };
+
 type Props = {
   goal: Goal;
   achievements: Achievement[];
-  reactions: Reaction[];     // このゴールの達成記録に付いたリアクション全件
+  reactions: Reaction[];
+  comments: CommentWithProfile[];
   currentUserId: string;
   isMe: boolean;
 };
@@ -37,6 +41,7 @@ export default function GroupGoalCard({
   goal,
   achievements,
   reactions,
+  comments,
   currentUserId,
   isMe,
 }: Props) {
@@ -46,19 +51,24 @@ export default function GroupGoalCard({
 
   const category = CATEGORIES.find((c) => c.value === goal.category);
 
-  // achieved な記録を日付でマップ
   const achievementByDate = new Map<string, Achievement>();
   for (const a of achievements) {
     if (a.achieved) achievementByDate.set(a.date, a);
   }
   const achievedDates = [...achievementByDate.keys()];
 
-  // リアクションを achievement_id でグループ化
   const reactionsByAchievement = new Map<string, Reaction[]>();
   for (const r of reactions) {
     const list = reactionsByAchievement.get(r.achievement_id) ?? [];
     list.push(r);
     reactionsByAchievement.set(r.achievement_id, list);
+  }
+
+  const commentsByAchievement = new Map<string, CommentWithProfile[]>();
+  for (const c of comments) {
+    const list = commentsByAchievement.get(c.achievement_id) ?? [];
+    list.push(c);
+    commentsByAchievement.set(c.achievement_id, list);
   }
 
   const [year, month] = goal.target_month.split("-").map(Number);
@@ -74,14 +84,15 @@ export default function GroupGoalCard({
     rate >= 40 ? { label: "💪 いい調子！",    color: "text-blue-500" } :
                  { label: "🌱 次月に挑戦！",   color: "text-gray-400" };
 
-  // 選択中セルのリアクション情報
   const selectedReactions = selectedAchievement
     ? (reactionsByAchievement.get(selectedAchievement.id) ?? [])
+    : [];
+  const selectedComments = selectedAchievement
+    ? (commentsByAchievement.get(selectedAchievement.id) ?? [])
     : [];
   const myReactionOnSelected = selectedReactions.find((r) => r.user_id === currentUserId);
 
   function handleDayClick(achievement: Achievement) {
-    if (isMe) return;
     setSelectedAchievement((prev) => (prev?.id === achievement.id ? null : achievement));
   }
 
@@ -92,7 +103,13 @@ export default function GroupGoalCard({
       await toggleReaction(achievementId, type);
       router.refresh();
     });
-    setSelectedAchievement(null);
+  }
+
+  // 達成済みセルのバッジ数（リアクション＋コメント合計）
+  function getBadgeCount(achievement: Achievement): number {
+    const rc = reactionsByAchievement.get(achievement.id)?.length ?? 0;
+    const cc = commentsByAchievement.get(achievement.id)?.length ?? 0;
+    return rc + cc;
   }
 
   return (
@@ -117,14 +134,13 @@ export default function GroupGoalCard({
         {maxStreak > 0 && (
           <div className="text-xs text-gray-400 mt-0.5">最大連続達成: {maxStreak}日</div>
         )}
-        {!isMe && (
-          <div className="text-xs text-gray-400 mt-0.5">⭐ をタップしてリアクション</div>
-        )}
+        <div className="text-xs text-gray-400 mt-0.5">
+          ⭐ をタップしてリアクション・コメント
+        </div>
       </div>
 
       {/* カレンダー */}
       <div className="px-4 pb-4">
-        {/* 曜日ヘッダー */}
         <div className="grid grid-cols-7 mb-1">
           {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
             <div
@@ -138,24 +154,21 @@ export default function GroupGoalCard({
           ))}
         </div>
 
-        {/* 日付グリッド */}
         <div className="grid grid-cols-7 gap-0.5">
           {Array.from({ length: firstDay }).map((_, i) => <div key={`b${i}`} />)}
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
             const dateStr = `${goal.target_month}-${String(day).padStart(2, "0")}`;
             const achievement = achievementByDate.get(dateStr);
             const isAchieved = !!achievement;
-            const cellReactions = achievement
-              ? (reactionsByAchievement.get(achievement.id) ?? [])
-              : [];
+            const badgeCount = achievement ? getBadgeCount(achievement) : 0;
             const isSelected = !!selectedAchievement && selectedAchievement.id === achievement?.id;
 
             return (
               <div
                 key={day}
-                onClick={() => achievement && !isMe && handleDayClick(achievement)}
+                onClick={() => achievement && handleDayClick(achievement)}
                 className={`aspect-square flex items-center justify-center rounded-lg text-xs relative ${
-                  isAchieved && !isMe ? "cursor-pointer" : ""
+                  isAchieved ? "cursor-pointer" : ""
                 } ${
                   isSelected
                     ? "ring-2 ring-orange-400 bg-orange-50"
@@ -167,9 +180,9 @@ export default function GroupGoalCard({
                 {isAchieved ? (
                   <>
                     <span className="text-base leading-none">⭐</span>
-                    {cellReactions.length > 0 && (
+                    {badgeCount > 0 && (
                       <span className="absolute bottom-0 right-0 bg-orange-400 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] font-bold leading-none">
-                        {cellReactions.length}
+                        {badgeCount}
                       </span>
                     )}
                   </>
@@ -181,41 +194,54 @@ export default function GroupGoalCard({
           })}
         </div>
 
-        {/* リアクションパネル（他人の⭐をタップしたとき表示） */}
-        {selectedAchievement && !isMe && (
+        {/* リアクション＋コメントパネル */}
+        {selectedAchievement && (
           <div className="mt-3 bg-orange-50 rounded-xl p-3">
-            <div className="text-xs text-gray-500 mb-2 text-center">
-              {selectedAchievement.date.replace(/-/g, "/")} の達成にリアクション
-              {myReactionOnSelected && (
-                <span className="ml-1 text-orange-500">· もう一度押すと解除</span>
-              )}
-            </div>
-            <div className="flex justify-center gap-3">
-              {REACTION_TYPES.map(({ type, emoji, label }) => {
-                const count = selectedReactions.filter((r) => r.type === type).length;
-                const isMine = myReactionOnSelected?.type === type;
-                return (
-                  <button
-                    key={type}
-                    disabled={isPending}
-                    onClick={() => handleReact(type)}
-                    className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all active:scale-95 ${
-                      isMine
-                        ? "bg-orange-400 text-white shadow-sm scale-105"
-                        : "bg-white text-gray-700 hover:bg-orange-100"
-                    } ${isPending ? "opacity-50" : ""}`}
-                  >
-                    <span className="text-2xl">{emoji}</span>
-                    <span className="text-xs font-medium">{label}</span>
-                    {count > 0 && (
-                      <span className={`text-xs font-bold ${isMine ? "text-white" : "text-orange-500"}`}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {/* リアクションボタン（他人の目標のみ） */}
+            {!isMe && (
+              <div className="mb-3">
+                <div className="text-xs text-gray-500 mb-2 text-center">
+                  {selectedAchievement.date.replace(/-/g, "/")} にリアクション
+                  {myReactionOnSelected && (
+                    <span className="ml-1 text-orange-500">· もう一度押すと解除</span>
+                  )}
+                </div>
+                <div className="flex justify-center gap-3">
+                  {REACTION_TYPES.map(({ type, emoji, label }) => {
+                    const count = selectedReactions.filter((r) => r.type === type).length;
+                    const isMine = myReactionOnSelected?.type === type;
+                    return (
+                      <button
+                        key={type}
+                        disabled={isPending}
+                        onClick={() => handleReact(type)}
+                        className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all active:scale-95 ${
+                          isMine
+                            ? "bg-orange-400 text-white shadow-sm scale-105"
+                            : "bg-white text-gray-700 hover:bg-orange-100"
+                        } ${isPending ? "opacity-50" : ""}`}
+                      >
+                        <span className="text-2xl">{emoji}</span>
+                        <span className="text-xs font-medium">{label}</span>
+                        {count > 0 && (
+                          <span className={`text-xs font-bold ${isMine ? "text-white" : "text-orange-500"}`}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* コメントスレッド */}
+            <CommentThread
+              achievementId={selectedAchievement.id}
+              comments={selectedComments}
+              currentUserId={currentUserId}
+              dateLabel={selectedAchievement.date.replace(/-/g, "/")}
+            />
           </div>
         )}
       </div>

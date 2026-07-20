@@ -37,3 +37,32 @@ export async function toggleReaction(achievementId: string, type: string) {
 
   revalidatePath("/groups", "layout");
 }
+
+export async function addComment(achievementId: string, body: string) {
+  const trimmed = body.trim();
+  if (!trimmed || trimmed.length > 200) return;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("comments").insert({
+    achievement_id: achievementId,
+    user_id: user.id,
+    body: trimmed,
+  });
+
+  revalidatePath("/groups", "layout");
+}
+
+export async function deleteComment(commentId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("comments").delete()
+    .eq("id", commentId)
+    .eq("user_id", user.id);
+
+  revalidatePath("/groups", "layout");
+}
