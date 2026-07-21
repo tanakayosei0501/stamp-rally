@@ -1,6 +1,3 @@
-// =============================================
-// ホーム画面 - 今月のスタンプラリー
-// =============================================
 import { unstable_noStore as noStore } from "next/cache";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -8,30 +5,28 @@ import GoalStampCard from "@/components/goals/GoalStampCard";
 import type { Achievement } from "@/types/database";
 
 export default async function HomePage() {
-  noStore(); // 毎回必ずDBから最新データを取得する
+  noStore();
 
-  // タイムゾーンずれを防ぐため文字列で今日の日付を組み立てる
   const now = new Date();
   const todayStr = [
     now.getFullYear(),
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
-  ].join("-"); // "2026-07-17"
-  const currentMonth = todayStr.slice(0, 7); // "2026-07"
+  ].join("-");
+  const currentMonth = todayStr.slice(0, 7);
   const displayMonth = `${now.getFullYear()}年${now.getMonth() + 1}月`;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // 今月の目標と、それぞれの達成記録を一括取得
+  // グループ名も一緒に取得（グループチャレンジのバッジ表示用）
   const { data: goals } = await supabase
     .from("goals")
-    .select("*, achievements(*)")
+    .select("*, achievements(*), groups(name)")
     .eq("target_month", currentMonth)
     .eq("user_id", user?.id ?? "")
     .order("created_at", { ascending: true });
 
-  // 全目標の合計スタンプ数
   const totalStamps = goals?.reduce(
     (sum, g) => sum + ((g.achievements as Achievement[])?.filter((a) => a.achieved).length ?? 0),
     0
@@ -39,13 +34,11 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* ヘッダー */}
       <div className="mb-5">
         <h1 className="text-xl font-bold text-gray-800">今月のスタンプラリー</h1>
         <p className="text-sm text-gray-500">{displayMonth}</p>
       </div>
 
-      {/* サマリーカード */}
       {goals && goals.length > 0 && (
         <div className="grid grid-cols-2 gap-3 mb-5">
           <div className="bg-orange-50 rounded-2xl p-4 text-center">
@@ -59,7 +52,6 @@ export default async function HomePage() {
         </div>
       )}
 
-      {/* 目標カード一覧 */}
       {!goals || goals.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-6xl mb-4">🌱</div>
@@ -76,14 +68,19 @@ export default async function HomePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {goals.map((goal) => (
-            <GoalStampCard
-              key={goal.id}
-              goal={goal}
-              achievements={(goal.achievements as Achievement[]) ?? []}
-              todayStr={todayStr}
-            />
-          ))}
+          {goals.map((goal) => {
+            const grp = Array.isArray(goal.groups) ? goal.groups[0] : goal.groups;
+            const groupName = (grp as { name: string } | null)?.name;
+            return (
+              <GoalStampCard
+                key={goal.id}
+                goal={goal}
+                achievements={(goal.achievements as Achievement[]) ?? []}
+                todayStr={todayStr}
+                groupName={groupName}
+              />
+            );
+          })}
         </div>
       )}
     </div>

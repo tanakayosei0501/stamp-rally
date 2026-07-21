@@ -29,9 +29,10 @@ type Props = {
   goal: Goal;
   achievements: Achievement[];
   todayStr: string; // "2026-07-17"
+  groupName?: string;
 };
 
-export default function GoalStampCard({ goal, achievements, todayStr }: Props) {
+export default function GoalStampCard({ goal, achievements, todayStr, groupName }: Props) {
   const router = useRouter();
 
   // 達成済み日付のセット（楽観的更新のためローカルで管理）
@@ -99,11 +100,18 @@ export default function GoalStampCard({ goal, achievements, todayStr }: Props) {
       <div className="px-4 pt-4 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            {category && (
-              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium mb-1 ${category.color}`}>
-                {category.emoji} {category.value}
-              </span>
-            )}
+            <div className="flex flex-wrap gap-1 mb-1">
+              {category && (
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${category.color}`}>
+                  {category.emoji} {category.value}
+                </span>
+              )}
+              {groupName && (
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-600">
+                  🤝 {groupName}
+                </span>
+              )}
+            </div>
             <h2 className="font-bold text-gray-800 leading-snug">{goal.title}</h2>
           </div>
 

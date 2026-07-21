@@ -50,6 +50,31 @@ export async function joinGroup(inviteCode: string) {
   return { success: true, groupName: result.group_name };
 }
 
+// グループチャレンジを作成（security definer RPC で全メンバー分のゴールを挿入）
+export async function createGroupChallenge(
+  groupId: string,
+  title: string,
+  category: string,
+  targetMonth: string
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "未ログインです" };
+
+  const { error } = await supabase.rpc("create_group_challenge", {
+    p_group_id: groupId,
+    p_title: title.trim(),
+    p_category: category,
+    p_target_month: targetMonth,
+  });
+
+  if (error) return { error: "チャレンジの作成に失敗しました" };
+
+  revalidatePath("/groups", "layout");
+  revalidatePath("/home");
+  return {};
+}
+
 // グループから退出
 export async function leaveGroup(groupId: string) {
   const supabase = await createClient();

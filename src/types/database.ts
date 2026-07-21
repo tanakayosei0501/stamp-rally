@@ -29,6 +29,7 @@ export type Goal = {
   id: string;
   user_id: string;
   group_id: string | null;
+  challenge_id: string | null;
   title: string;
   description: string | null;
   target_month: string; // 例: "2026-08"
