@@ -67,26 +67,31 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     ? await supabase.from("reactions").select("*").in("achievement_id", achievementIds)
     : { data: [] as Reaction[] };
 
-  // コメントをプロフィール付きで取得
+  // コメントを取得（profiles への FK がないため2段階で取得）
   const { data: rawComments } = achievementIds.length > 0
     ? await supabase
         .from("comments")
-        .select("*, profiles(display_name)")
+        .select("*")
         .in("achievement_id", achievementIds)
         .order("created_at")
-    : { data: [] };
+    : { data: [] as Comment[] };
 
-  const allComments: CommentWithProfile[] = (rawComments ?? []).map((c) => {
-    const profile = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
-    return {
-      id: c.id,
-      achievement_id: c.achievement_id,
-      user_id: c.user_id,
-      body: c.body,
-      created_at: c.created_at,
-      display_name: (profile as { display_name: string } | null)?.display_name ?? "?",
-    } satisfies CommentWithProfile;
-  });
+  const commentUserIds = [...new Set((rawComments ?? []).map((c) => c.user_id))];
+  const { data: commentProfiles } = commentUserIds.length > 0
+    ? await supabase.from("profiles").select("id, display_name").in("id", commentUserIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const profileNameMap = new Map(
+    (commentProfiles ?? []).map((p) => [p.id, p.display_name])
+  );
+
+  const allComments: CommentWithProfile[] = (rawComments ?? []).map((c) => ({
+    id: c.id,
+    achievement_id: c.achievement_id,
+    user_id: c.user_id,
+    body: c.body,
+    created_at: c.created_at,
+    display_name: profileNameMap.get(c.user_id) ?? "?",
+  }));
 
   // userId → goals のマップを作成
   const goalsByUser = new Map<string, { goals: typeof allGoals; stamps: number; achievedToday: boolean }>();
