@@ -1,7 +1,4 @@
 "use client";
-// =============================================
-// グループ作成・参加 モーダル
-// =============================================
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createGroup, joinGroup } from "@/app/(dashboard)/groups/actions";
@@ -23,7 +20,6 @@ export default function GroupModals({ hasGroups }: Props) {
     setError("");
   }
 
-  // グループ作成
   async function handleCreate(formData: FormData) {
     setError("");
     startTransition(async () => {
@@ -37,7 +33,6 @@ export default function GroupModals({ hasGroups }: Props) {
     });
   }
 
-  // 招待コードで参加
   async function handleJoin(formData: FormData) {
     setError("");
     const code = formData.get("invite_code") as string;
@@ -76,66 +71,80 @@ export default function GroupModals({ hasGroups }: Props) {
           className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center sm:items-center"
           onClick={(e) => e.target === e.currentTarget && closeModal()}
         >
-          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90dvh]">
+            {/* ヘッダー（固定） */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
               <h2 className="text-lg font-bold text-gray-800">
                 {modal === "create" ? "グループを作成" : "招待コードで参加"}
               </h2>
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
             </div>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
-                {error}
-              </div>
-            )}
-
+            {/* スクロール可能なフォームフィールド */}
             {modal === "create" ? (
-              <form action={handleCreate} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    グループ名
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    required
-                    placeholder="例: 田中家チーム、友人グループ"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400"
-                  />
+              <form action={handleCreate} className="flex flex-col flex-1 min-h-0">
+                <div className="overflow-y-auto flex-1 px-6 pb-2 space-y-4">
+                  {error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+                      {error}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      グループ名
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      required
+                      placeholder="例: 田中家チーム、友人グループ"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    作成後に表示される招待コードを仲間に共有してください。
+                  </p>
                 </div>
-                <p className="text-sm text-gray-400">
-                  作成後に表示される招待コードを仲間に共有してください。
-                </p>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full bg-orange-400 hover:bg-orange-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-colors"
-                >
-                  {isPending ? "作成中..." : "作成する"}
-                </button>
+                <div className="px-6 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="w-full bg-orange-400 hover:bg-orange-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-colors"
+                  >
+                    {isPending ? "作成中..." : "作成する"}
+                  </button>
+                </div>
               </form>
             ) : (
-              <form action={handleJoin} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    招待コード
-                  </label>
-                  <input
-                    type="text"
-                    name="invite_code"
-                    required
-                    placeholder="8桁のコードを入力"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400 tracking-widest font-mono text-center text-lg"
-                  />
+              <form action={handleJoin} className="flex flex-col flex-1 min-h-0">
+                <div className="overflow-y-auto flex-1 px-6 pb-2 space-y-4">
+                  {error && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+                      {error}
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      招待コード
+                    </label>
+                    <input
+                      type="text"
+                      name="invite_code"
+                      required
+                      placeholder="8桁のコードを入力"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300 text-gray-800 placeholder-gray-400 tracking-widest font-mono text-center text-lg"
+                    />
+                  </div>
                 </div>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full bg-orange-400 hover:bg-orange-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-colors"
-                >
-                  {isPending ? "参加中..." : "参加する"}
-                </button>
+                <div className="px-6 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="w-full bg-orange-400 hover:bg-orange-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-colors"
+                  >
+                    {isPending ? "参加中..." : "参加する"}
+                  </button>
+                </div>
               </form>
             )}
           </div>

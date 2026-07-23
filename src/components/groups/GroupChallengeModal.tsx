@@ -6,7 +6,7 @@ import { createGroupChallenge } from "@/app/(dashboard)/groups/actions";
 
 type Props = {
   groupId: string;
-  currentMonth: string; // "2026-07"
+  currentMonth: string;
 };
 
 export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
@@ -53,69 +53,78 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
           className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center"
           onClick={(e) => e.target === e.currentTarget && handleClose()}
         >
-          <div className="bg-white rounded-t-3xl w-full max-w-lg px-5 pt-5 pb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-800">🤝 グループチャレンジを作成</h2>
-              <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+          <div className="bg-white rounded-t-3xl w-full max-w-lg flex flex-col max-h-[90dvh]">
+            {/* ヘッダー（固定） */}
+            <div className="px-5 pt-5 pb-3 shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-800">🤝 グループチャレンジを作成</h2>
+                <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">グループ全員に同じ目標が追加されます</p>
             </div>
-            <p className="text-sm text-gray-500 mb-4">グループ全員に同じ目標が追加されます</p>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* チャレンジ名 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">チャレンジ名</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="例: 毎日30分読書"
-                  maxLength={50}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-300"
-                />
-              </div>
-
-              {/* カテゴリ */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {CATEGORIES.map((c) => (
-                    <button
-                      key={c.value}
-                      type="button"
-                      onClick={() => setCategory(c.value)}
-                      className={`flex flex-col items-center gap-0.5 p-2 rounded-xl border-2 transition-all ${
-                        category === c.value
-                          ? "border-orange-400 bg-orange-50"
-                          : "border-gray-100 hover:border-gray-200"
-                      }`}
-                    >
-                      <span className="text-xl">{c.emoji}</span>
-                      <span className="text-[10px] text-gray-600">{c.value}</span>
-                    </button>
-                  ))}
+            {/* スクロール可能なフォームフィールド */}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="overflow-y-auto flex-1 px-5 pb-2 space-y-4">
+                {/* チャレンジ名 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">チャレンジ名</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="例: 毎日30分読書"
+                    maxLength={50}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  />
                 </div>
+
+                {/* カテゴリ */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {CATEGORIES.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setCategory(c.value)}
+                        className={`flex flex-col items-center gap-0.5 p-2 rounded-xl border-2 transition-all ${
+                          category === c.value
+                            ? "border-orange-400 bg-orange-50"
+                            : "border-gray-100 hover:border-gray-200"
+                        }`}
+                      >
+                        <span className="text-xl">{c.emoji}</span>
+                        <span className="text-[10px] text-gray-600">{c.value}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 対象月 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">対象月</label>
+                  <input
+                    type="month"
+                    value={targetMonth}
+                    onChange={(e) => setTargetMonth(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </div>
+
+                {error && <p className="text-sm text-red-500">{error}</p>}
               </div>
 
-              {/* 対象月 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">対象月</label>
-                <input
-                  type="month"
-                  value={targetMonth}
-                  onChange={(e) => setTargetMonth(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-orange-300"
-                />
+              {/* 送信ボタン（固定） */}
+              <div className="px-5 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  {isPending ? "作成中…" : "全員にチャレンジを追加する"}
+                </button>
               </div>
-
-              {error && <p className="text-sm text-red-500">{error}</p>}
-
-              <button
-                type="submit"
-                disabled={isPending}
-                className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
-              >
-                {isPending ? "作成中…" : "全員にチャレンジを追加する"}
-              </button>
             </form>
           </div>
         </div>
