@@ -52,7 +52,7 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40"
           onClick={(e) => e.target === e.currentTarget && handleClose()}
         >
           <div

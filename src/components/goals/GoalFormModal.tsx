@@ -50,7 +50,7 @@ export default function GoalFormModal({
      * overflow-hidden で内部コンテンツのはみ出しを防ぐ
      */
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       {/*
