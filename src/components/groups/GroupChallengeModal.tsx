@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORIES } from "@/lib/categories";
 import { createGroupChallenge } from "@/app/(dashboard)/groups/actions";
+import { useScrollLock } from "@/hooks/useScrollLock";
 
 type Props = {
   groupId: string;
@@ -14,10 +15,11 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
-
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<string>(CATEGORIES[0].value);
   const [targetMonth, setTargetMonth] = useState(currentMonth);
+
+  useScrollLock(isOpen);
 
   function handleClose() {
     setIsOpen(false);
@@ -50,23 +52,32 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
 
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
           onClick={(e) => e.target === e.currentTarget && handleClose()}
         >
-          <div className="bg-white rounded-t-3xl w-full max-w-lg flex flex-col max-h-[90dvh]">
+          <div
+            className="bg-white rounded-t-3xl w-full max-w-lg flex flex-col"
+            style={{ maxHeight: "85dvh" }}
+          >
             {/* ヘッダー（固定） */}
-            <div className="px-5 pt-5 pb-3 shrink-0">
+            <div className="px-5 pt-5 pb-3 flex-shrink-0 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-gray-800">🤝 グループチャレンジを作成</h2>
-                <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 text-xl"
+                >
+                  ✕
+                </button>
               </div>
               <p className="text-sm text-gray-500 mt-1">グループ全員に同じ目標が追加されます</p>
             </div>
 
-            {/* スクロール可能なフォームフィールド */}
-            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto flex-1 px-5 pb-2 space-y-4">
-                {/* チャレンジ名 */}
+            {/* フォーム */}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              {/* スクロール可能なフィールド */}
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">チャレンジ名</label>
                   <input
@@ -79,7 +90,6 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
                   />
                 </div>
 
-                {/* カテゴリ */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
                   <div className="grid grid-cols-5 gap-2">
@@ -101,7 +111,6 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
                   </div>
                 </div>
 
-                {/* 対象月 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">対象月</label>
                   <input
@@ -116,11 +125,11 @@ export default function GroupChallengeModal({ groupId, currentMonth }: Props) {
               </div>
 
               {/* 送信ボタン（固定） */}
-              <div className="px-5 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+              <div className="flex-shrink-0 px-5 pt-3 pb-8 bg-white border-t border-gray-100">
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50"
+                  className="w-full bg-orange-400 hover:bg-orange-500 active:bg-orange-600 text-white font-bold py-3.5 rounded-xl transition-colors disabled:opacity-50"
                 >
                   {isPending ? "作成中…" : "全員にチャレンジを追加する"}
                 </button>

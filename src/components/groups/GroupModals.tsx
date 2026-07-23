@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createGroup, joinGroup } from "@/app/(dashboard)/groups/actions";
+import { useScrollLock } from "@/hooks/useScrollLock";
 
 type ModalType = "create" | "join" | null;
 
@@ -14,6 +15,8 @@ export default function GroupModals({ hasGroups }: Props) {
   const [modal, setModal] = useState<ModalType>(null);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useScrollLock(modal !== null);
 
   function closeModal() {
     setModal(null);
@@ -49,7 +52,6 @@ export default function GroupModals({ hasGroups }: Props) {
 
   return (
     <>
-      {/* アクションボタン */}
       <div className={`grid gap-3 mb-6 ${hasGroups ? "grid-cols-2" : "grid-cols-1"}`}>
         <button
           onClick={() => setModal("create")}
@@ -65,25 +67,32 @@ export default function GroupModals({ hasGroups }: Props) {
         </button>
       </div>
 
-      {/* モーダル */}
       {modal && (
         <div
-          className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center sm:items-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center"
           onClick={(e) => e.target === e.currentTarget && closeModal()}
         >
-          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90dvh]">
+          <div
+            className="bg-white w-full max-w-lg rounded-t-3xl shadow-xl flex flex-col sm:rounded-2xl"
+            style={{ maxHeight: "85dvh" }}
+          >
             {/* ヘッダー（固定） */}
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-800">
                 {modal === "create" ? "グループを作成" : "招待コードで参加"}
               </h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 text-xl"
+              >
+                ×
+              </button>
             </div>
 
-            {/* スクロール可能なフォームフィールド */}
             {modal === "create" ? (
-              <form action={handleCreate} className="flex flex-col flex-1 min-h-0">
-                <div className="overflow-y-auto flex-1 px-6 pb-2 space-y-4">
+              <form action={handleCreate} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
                   {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
                       {error}
@@ -105,19 +114,19 @@ export default function GroupModals({ hasGroups }: Props) {
                     作成後に表示される招待コードを仲間に共有してください。
                   </p>
                 </div>
-                <div className="px-6 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+                <div className="flex-shrink-0 px-6 pt-3 pb-8 bg-white border-t border-gray-100">
                   <button
                     type="submit"
                     disabled={isPending}
-                    className="w-full bg-orange-400 hover:bg-orange-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-colors"
+                    className="w-full bg-orange-400 hover:bg-orange-500 active:bg-orange-600 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition-colors"
                   >
                     {isPending ? "作成中..." : "作成する"}
                   </button>
                 </div>
               </form>
             ) : (
-              <form action={handleJoin} className="flex flex-col flex-1 min-h-0">
-                <div className="overflow-y-auto flex-1 px-6 pb-2 space-y-4">
+              <form action={handleJoin} className="flex flex-col flex-1 overflow-hidden min-h-0">
+                <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
                   {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
                       {error}
@@ -136,11 +145,11 @@ export default function GroupModals({ hasGroups }: Props) {
                     />
                   </div>
                 </div>
-                <div className="px-6 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+                <div className="flex-shrink-0 px-6 pt-3 pb-8 bg-white border-t border-gray-100">
                   <button
                     type="submit"
                     disabled={isPending}
-                    className="w-full bg-orange-400 hover:bg-orange-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-colors"
+                    className="w-full bg-orange-400 hover:bg-orange-500 active:bg-orange-600 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl transition-colors"
                   >
                     {isPending ? "参加中..." : "参加する"}
                   </button>

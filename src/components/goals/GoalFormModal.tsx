@@ -3,6 +3,7 @@ import { useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createGoal, updateGoal } from "@/app/(dashboard)/goals/actions";
 import { CATEGORIES } from "@/lib/categories";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Goal } from "@/types/database";
 
 type Props = {
@@ -21,6 +22,9 @@ export default function GoalFormModal({
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const isEditing = !!editingGoal;
+
+  // iOS Safari: body をロックしてモーダル背後のスクロールを防ぐ
+  useScrollLock(isOpen);
 
   useEffect(() => {
     if (isOpen && !isEditing) {
@@ -41,31 +45,41 @@ export default function GoalFormModal({
   }
 
   return (
+    /*
+     * 背景オーバーレイ: fixed inset-0 で画面全体を覆う
+     * overflow-hidden で内部コンテンツのはみ出しを防ぐ
+     */
     <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       {/*
-        max-h-[90dvh]: dvh = dynamic viewport height (iOS Safariのアドレスバーを考慮)
-        flex flex-col: ヘッダー固定・中身スクロール・ボタン固定のため
-      */}
-      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90dvh]">
-        {/* ヘッダー（固定） */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+       * モーダルパネル
+       * - 高さ: 画面の最大85%に制限 (safe-area を考慮して少し余裕を持たせる)
+       * - flex flex-col: ヘッダー固定・中身スクロール・フッター固定のレイアウト
+       */}
+      <div
+        className="bg-white w-full max-w-lg rounded-t-3xl shadow-xl flex flex-col sm:rounded-2xl sm:mb-8"
+        style={{ maxHeight: "85dvh" }}
+      >
+        {/* ヘッダー（スクロールしない） */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-800">
             {isEditing ? "目標を編集" : "新しい目標を追加"}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 text-xl"
           >
             ×
           </button>
         </div>
 
-        {/* スクロール可能なフォームフィールド */}
-        <form ref={formRef} action={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="overflow-y-auto flex-1 px-6 pb-2 space-y-4">
+        {/* フォーム: 中身はスクロール、ボタンは固定 */}
+        <form ref={formRef} action={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+          {/* スクロール可能なフィールド領域 */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
             {isEditing && (
               <input type="hidden" name="id" value={editingGoal.id} />
             )}
@@ -122,7 +136,7 @@ export default function GoalFormModal({
               </div>
             </div>
 
-            {/* メモ(任意) */}
+            {/* メモ（任意） */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 メモ（任意）
@@ -137,11 +151,11 @@ export default function GoalFormModal({
             </div>
           </div>
 
-          {/* 送信ボタン（固定） */}
-          <div className="px-6 pt-3 pb-8 shrink-0 border-t border-gray-100 bg-white">
+          {/* 送信ボタン（スクロールしない・常に画面内） */}
+          <div className="flex-shrink-0 px-6 pt-3 pb-8 bg-white border-t border-gray-100">
             <button
               type="submit"
-              className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-colors"
+              className="w-full bg-orange-400 hover:bg-orange-500 active:bg-orange-600 text-white font-bold py-3.5 rounded-xl transition-colors"
             >
               {isEditing ? "更新する" : "追加する"}
             </button>
