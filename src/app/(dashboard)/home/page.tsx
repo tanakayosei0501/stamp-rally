@@ -3,6 +3,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import GoalStampCard from "@/components/goals/GoalStampCard";
 import GrowingPlant from "@/components/home/GrowingPlant";
+import ShareCard from "@/components/home/ShareCard";
+import { CHARACTER_STAGES } from "@/lib/shopItems";
 import type { Achievement } from "@/types/database";
 
 export default async function HomePage() {
@@ -63,6 +65,12 @@ export default async function HomePage() {
     (g.achievements as Achievement[]).some((a) => a.date === todayStr && a.achieved)
   ) ?? false;
 
+  // シェアカード用のキャラクター絵文字を計算
+  const STAGE_THRESHOLDS = [100, 81, 61, 41, 21, 1, 0];
+  const stageIndex = STAGE_THRESHOLDS.findIndex((t) => achievementRate >= t);
+  const emojiList = CHARACTER_STAGES[activeCharacter] ?? CHARACTER_STAGES.plant;
+  const shareCharacterEmoji = emojiList[stageIndex >= 0 ? stageIndex : emojiList.length - 1];
+
   return (
     <div>
       <div className="mb-5">
@@ -82,17 +90,27 @@ export default async function HomePage() {
       )}
 
       {goals && goals.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <div className="bg-orange-50 rounded-2xl p-4 text-center">
-            <div className="text-3xl font-bold text-orange-500">{goals.length}</div>
-            <div className="text-xs text-gray-500 mt-0.5">今月の目標</div>
-          </div>
-          <div className="bg-yellow-50 rounded-2xl p-4 text-center">
-            <div className="text-3xl font-bold text-yellow-500">
-              {totalStamps}<span className="text-xl ml-1">⭐</span>
+        <div className="mb-5">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-orange-50 rounded-2xl p-4 text-center">
+              <div className="text-3xl font-bold text-orange-500">{goals.length}</div>
+              <div className="text-xs text-gray-500 mt-0.5">今月の目標</div>
             </div>
-            <div className="text-xs text-gray-500 mt-0.5">獲得スタンプ</div>
+            <div className="bg-yellow-50 rounded-2xl p-4 text-center">
+              <div className="text-3xl font-bold text-yellow-500">
+                {totalStamps}<span className="text-xl ml-1">⭐</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-0.5">獲得スタンプ</div>
+            </div>
           </div>
+          {/* シェア画像生成ボタン */}
+          <ShareCard
+            displayMonth={displayMonth}
+            achievementRate={achievementRate}
+            totalStamps={totalStamps}
+            characterEmoji={shareCharacterEmoji}
+            goalsCount={goals.length}
+          />
         </div>
       )}
 

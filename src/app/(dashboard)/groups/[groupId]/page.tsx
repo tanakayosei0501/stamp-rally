@@ -9,6 +9,7 @@ import GroupChallengeModal from "@/components/groups/GroupChallengeModal";
 import MilestoneBanner from "@/components/groups/MilestoneBanner";
 import GroupActivityFeed from "@/components/groups/GroupActivityFeed";
 import GroupBadges from "@/components/groups/GroupBadges";
+import CheerButton from "@/components/groups/CheerButton";
 import type { Achievement, Reaction, Comment } from "@/types/database";
 import type { BadgeInfo, MvpInfo } from "@/components/groups/GroupBadges";
 import type { CommentWithProfile } from "@/components/groups/GroupGoalCard";
@@ -242,6 +243,27 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
   activityItems.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const recentActivities = activityItems.slice(0, 5);
 
+  // ─── STEP C: 今日のエールメッセージ ───
+  type CheerMsg = { id: string; from_user_id: string; to_user_id: string; message: string; from_name: string };
+  const { data: rawCheers } = isCurrentMonth
+    ? await supabase
+        .from("cheer_messages")
+        .select("id, from_user_id, to_user_id, message")
+        .eq("group_id", groupId)
+        .gte("sent_at", `${todayStr}T00:00:00+09:00`)
+        .lt("sent_at",  `${todayStr}T23:59:59+09:00`)
+    : { data: [] };
+
+  const todayCheers: CheerMsg[] = (rawCheers ?? []).map((c) => ({
+    id: c.id,
+    from_user_id: c.from_user_id,
+    to_user_id: c.to_user_id,
+    message: c.message,
+    from_name: memberNameMap.get(c.from_user_id) ?? "?",
+  }));
+  // 自分が受け取ったエール
+  const myCheers = todayCheers.filter((c) => c.to_user_id === user.id);
+
   // ─── STEP A: MVP・バッジ ───
   const stampRanking = [...goalsByUser.entries()]
     .map(([uid, d]) => ({ uid, name: memberNameMap.get(uid) ?? "?", stamps: d.stamps }))
@@ -406,29 +428,56 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
         )}
       </div>
 
+      {/* ─── 自分へのエール ─── */}
+      {myCheers.length > 0 && (
+        <div className="mb-5 space-y-2">
+          {myCheers.map((c) => (
+            <div key={c.id} className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 flex items-start gap-2">
+              <span className="text-lg mt-0.5">✉️</span>
+              <div>
+                <span className="text-xs font-bold text-blue-600">{c.from_name}</span>
+                <span className="text-xs text-gray-600"> から「{c.message}」</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ─── 個人目標 ─── */}
       <div>
         <h2 className="font-bold text-gray-700 mb-3 px-1">📋 個人目標</h2>
         {sortedMembers.map((gm) => {
           const displayName = profileOf(gm);
+          const isMe = gm.user_id === user.id;
           const data = goalsByUser.get(gm.user_id) ?? { goals: [], stamps: 0, achievedToday: false };
 
           return (
-            <MemberGoalsSection
-              key={gm.user_id}
-              userId={gm.user_id}
-              displayName={displayName}
-              isMe={gm.user_id === user.id}
-              goals={(data.goals ?? []).map((g) => ({
-                ...g,
-                achievements: (g.achievements as Achievement[]) ?? [],
-              }))}
-              totalStamps={data.stamps}
-              achievedToday={data.achievedToday}
-              reactions={(allReactions as Reaction[]) ?? []}
-              comments={allComments}
-              currentUserId={user.id}
-            />
+            <div key={gm.user_id}>
+              {/* エール送るボタン（非メンバーで今日未達成の場合） */}
+              {!isMe && !data.achievedToday && isCurrentMonth && (
+                <div className="flex justify-end mb-1 pr-1">
+                  <CheerButton
+                    toUserId={gm.user_id}
+                    toName={displayName}
+                    groupId={groupId}
+                  />
+                </div>
+              )}
+              <MemberGoalsSection
+                userId={gm.user_id}
+                displayName={displayName}
+                isMe={isMe}
+                goals={(data.goals ?? []).map((g) => ({
+                  ...g,
+                  achievements: (g.achievements as Achievement[]) ?? [],
+                }))}
+                totalStamps={data.stamps}
+                achievedToday={data.achievedToday}
+                reactions={(allReactions as Reaction[]) ?? []}
+                comments={allComments}
+                currentUserId={user.id}
+              />
+            </div>
           );
         })}
       </div>
