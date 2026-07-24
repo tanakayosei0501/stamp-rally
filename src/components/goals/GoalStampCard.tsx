@@ -145,7 +145,7 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName,
         setTimeout(() => setCelebrating(null), 2200);
       }
 
-      await toggleAchievement(goal.id, dateStr, isRare);
+      await toggleAchievement(goal.id, dateStr, isRare, true);
     } else {
       // 削除時はレアSet からも除去
       setRareSet((prev) => {
@@ -153,7 +153,7 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName,
         next.delete(dateStr);
         return next;
       });
-      await toggleAchievement(goal.id, dateStr, false);
+      await toggleAchievement(goal.id, dateStr, false, false);
     }
 
     router.refresh();
