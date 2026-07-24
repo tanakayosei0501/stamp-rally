@@ -9,12 +9,20 @@ const ALL_ITEMS = [...STAMP_ITEMS, ...CHARACTER_ITEMS];
 async function getBalance(userId: string) {
   const supabase = await createClient();
 
-  // 全期間の達成数（= 累積獲得ポイント）
-  const { count: totalEarned } = await supabase
-    .from("achievements")
-    .select("id", { count: "exact", head: true })
-    .eq("achieved", true)
-    .filter("goal_id", "in", `(select id from goals where user_id = '${userId}')`);
+  // 全期間の達成数（= 累積獲得ポイント）— 2ステップクエリ
+  const { data: userGoals } = await supabase
+    .from("goals")
+    .select("id")
+    .eq("user_id", userId);
+  const goalIds = (userGoals ?? []).map((g) => g.id);
+
+  const { count: totalEarned } = goalIds.length > 0
+    ? await supabase
+        .from("achievements")
+        .select("id", { count: "exact", head: true })
+        .eq("achieved", true)
+        .in("goal_id", goalIds)
+    : { count: 0 };
 
   // 購入済みアイテムの合計コスト
   const { data: owned } = await supabase

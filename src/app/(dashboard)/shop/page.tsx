@@ -10,12 +10,20 @@ export default async function ShopPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // 累積獲得ポイント（全達成数）
-  const { count: totalEarned } = await supabase
-    .from("achievements")
-    .select("id", { count: "exact", head: true })
-    .eq("achieved", true)
-    .filter("goal_id", "in", `(select id from goals where user_id = '${user.id}')`);
+  // 累積獲得ポイント（全達成数）— 2ステップ: goal_id 取得 → 達成数カウント
+  const { data: userGoals } = await supabase
+    .from("goals")
+    .select("id")
+    .eq("user_id", user.id);
+  const goalIds = (userGoals ?? []).map((g) => g.id);
+
+  const { count: totalEarned } = goalIds.length > 0
+    ? await supabase
+        .from("achievements")
+        .select("id", { count: "exact", head: true })
+        .eq("achieved", true)
+        .in("goal_id", goalIds)
+    : { count: 0 };
 
   // 購入済みアイテム
   const { data: ownedItems } = await supabase
