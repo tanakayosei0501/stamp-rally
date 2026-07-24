@@ -6,13 +6,31 @@ import HistoryMonthSelector from "@/components/history/HistoryMonthSelector";
 import MemberGoalsSection from "@/components/groups/MemberGoalsSection";
 import GroupChallengeCard from "@/components/groups/GroupChallengeCard";
 import GroupChallengeModal from "@/components/groups/GroupChallengeModal";
+import MilestoneBanner from "@/components/groups/MilestoneBanner";
+import GroupActivityFeed from "@/components/groups/GroupActivityFeed";
 import type { Achievement, Reaction, Comment } from "@/types/database";
 import type { CommentWithProfile } from "@/components/groups/GroupGoalCard";
+import type { ActivityItem } from "@/components/groups/GroupActivityFeed";
 
 type Props = {
   params: Promise<{ groupId: string }>;
   searchParams: Promise<{ month?: string }>;
 };
+
+// 指定日までの連続達成日数を計算
+function calcCurrentStreak(achievedDates: string[], todayStr: string): number {
+  const dateSet = new Set(achievedDates);
+  let streak = 0;
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const cur = new Date(y, m - 1, d);
+  while (true) {
+    const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+    if (!dateSet.has(key)) break;
+    streak++;
+    cur.setDate(cur.getDate() - 1);
+  }
+  return streak;
+}
 
 export default async function GroupDetailPage({ params, searchParams }: Props) {
   noStore();
@@ -28,6 +46,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
   ].join("-");
   const currentMonth = todayStr.slice(0, 7);
   const targetMonth = (month && month <= currentMonth) ? month : currentMonth;
+  const isCurrentMonth = targetMonth === currentMonth;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -45,7 +64,6 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     (gm: { user_id: string }) => gm.user_id
   );
 
-  // 選択月の全メンバーの目標＋達成記録（グループチャレンジ含む）
   const { data: allGoals } = await supabase
     .from("goals")
     .select("*, achievements(*)")
@@ -57,7 +75,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
   const groupChallengeGoals = (allGoals ?? []).filter((g) => g.group_id === groupId);
   const personalGoals = (allGoals ?? []).filter((g) => !g.group_id);
 
-  // challenge_id でグループチャレンジをまとめる
+  // challenge_id でまとめる
   const challengeMap = new Map<string, typeof groupChallengeGoals>();
   for (const g of groupChallengeGoals) {
     if (!g.challenge_id) continue;
@@ -66,7 +84,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     challengeMap.set(g.challenge_id, list);
   }
 
-  // リアクション・コメントは個人目標の達成記録のみ対象
+  // 個人目標の達成記録のみ対象
   const allAchievements = personalGoals.flatMap(
     (g) => (g.achievements as Achievement[]).filter((a) => a.achieved)
   );
@@ -100,7 +118,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     display_name: profileNameMap.get(c.user_id) ?? "?",
   }));
 
-  // userId → 個人目標データ のマップ
+  // userId → 個人目標データ
   const goalsByUser = new Map<string, { goals: typeof personalGoals; stamps: number; achievedToday: boolean }>();
   for (const id of memberIds) {
     const userGoals = personalGoals.filter((g) => g.user_id === id);
@@ -114,23 +132,113 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
     goalsByUser.set(id, { goals: userGoals, stamps, achievedToday });
   }
 
-  // 自分を先頭、他メンバーはスタンプ数降順でソート
+  // プロフィール lookup
+  const profileOf = (gm: { user_id: string; profiles: unknown }) => {
+    const p = Array.isArray(gm.profiles) ? gm.profiles[0] : gm.profiles;
+    return (p as { display_name: string } | null)?.display_name ?? "?";
+  };
+
+  const memberNameMap = new Map<string, string>(
+    (group.group_members ?? []).map((gm) => [gm.user_id, profileOf(gm)])
+  );
+
+  // 自分を先頭、他はスタンプ数降順
   const sortedMembers = [...(group.group_members ?? [])].sort((a, b) => {
     if (a.user_id === user.id) return -1;
     if (b.user_id === user.id) return 1;
     return (goalsByUser.get(b.user_id)?.stamps ?? 0) - (goalsByUser.get(a.user_id)?.stamps ?? 0);
   });
 
-  // プロフィール lookup ヘルパー
-  const profileOf = (gm: { user_id: string; profiles: unknown }) => {
-    const p = Array.isArray(gm.profiles) ? gm.profiles[0] : gm.profiles;
-    return (p as { display_name: string } | null)?.display_name ?? "?";
-  };
-
-  // グループメンバーの display_name マップ
-  const memberNameMap = new Map<string, string>(
-    (group.group_members ?? []).map((gm) => [gm.user_id, profileOf(gm)])
+  // ─── STEP C: グループ合計スタンプ ───
+  const challengeStamps = groupChallengeGoals.reduce(
+    (sum, g) => sum + (g.achievements as Achievement[]).filter((a) => a.achieved).length,
+    0
   );
+  const personalStamps = [...goalsByUser.values()].reduce((sum, d) => sum + d.stamps, 0);
+  const groupTotalStamps = personalStamps + challengeStamps;
+
+  // ─── STEP C: マイルストーン（7日以上連続達成） ───
+  const milestones: { name: string; streak: number }[] = [];
+  if (isCurrentMonth) {
+    for (const [userId, data] of goalsByUser) {
+      const achievedDates = data.goals.flatMap(
+        (g) => (g.achievements as Achievement[]).filter((a) => a.achieved).map((a) => a.date)
+      );
+      const streak = calcCurrentStreak(achievedDates, todayStr);
+      if (streak >= 7) {
+        milestones.push({ name: memberNameMap.get(userId) ?? "?", streak });
+      }
+    }
+    // streak 降順ソート
+    milestones.sort((a, b) => b.streak - a.streak);
+  }
+
+  // ─── STEP C: アクティビティフィード ───
+  // achievement_id → goal の逆引きマップ
+  const achievementToGoalTitle = new Map<string, string>();
+  const achievementToUserId = new Map<string, string>();
+  for (const goal of personalGoals) {
+    for (const ach of goal.achievements as Achievement[]) {
+      if (ach.achieved) {
+        achievementToGoalTitle.set(ach.id, goal.title);
+        achievementToUserId.set(ach.id, goal.user_id);
+      }
+    }
+  }
+
+  const activityItems: ActivityItem[] = [];
+
+  // 今日の達成
+  for (const goal of personalGoals) {
+    const todayAch = (goal.achievements as Achievement[]).find(
+      (a) => a.date === todayStr && a.achieved
+    );
+    if (todayAch) {
+      activityItems.push({
+        id: `ach-${todayAch.id}`,
+        type: "achievement",
+        actorName: memberNameMap.get(goal.user_id) ?? "?",
+        content: `「${goal.title}」を達成`,
+        timestamp: todayAch.created_at,
+      });
+    }
+  }
+
+  // リアクション
+  for (const r of allReactions as Reaction[]) {
+    const targetUserId = achievementToUserId.get(r.achievement_id);
+    const goalTitle = achievementToGoalTitle.get(r.achievement_id);
+    if (!targetUserId || !goalTitle) continue;
+    const targetName = memberNameMap.get(targetUserId) ?? "?";
+    const emoji = r.type === "clap" ? "👏" : r.type === "fire" ? "🔥" : "💪";
+    activityItems.push({
+      id: `r-${r.id}`,
+      type: "reaction",
+      actorName: memberNameMap.get(r.user_id) ?? "?",
+      content: `${emoji} ${targetName}の「${goalTitle}」にリアクション`,
+      timestamp: r.created_at,
+    });
+  }
+
+  // コメント
+  for (const c of allComments) {
+    const targetUserId = achievementToUserId.get(c.achievement_id);
+    const goalTitle = achievementToGoalTitle.get(c.achievement_id);
+    if (!targetUserId || !goalTitle) continue;
+    const targetName = memberNameMap.get(targetUserId) ?? "?";
+    const preview = c.body.length > 15 ? c.body.slice(0, 15) + "…" : c.body;
+    activityItems.push({
+      id: `c-${c.id}`,
+      type: "comment",
+      actorName: c.display_name,
+      content: `「${preview}」と${targetName}を応援`,
+      timestamp: c.created_at,
+    });
+  }
+
+  // 最新5件
+  activityItems.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  const recentActivities = activityItems.slice(0, 5);
 
   const displayMonth = (() => {
     const [y, m] = targetMonth.split("-");
@@ -160,7 +268,33 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
         basePath={`/groups/${groupId}`}
       />
 
-      {/* ─── グループチャレンジセクション ─── */}
+      {/* ─── グループ合計スタンプ ─── */}
+      {groupTotalStamps > 0 && (
+        <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-2xl p-4 mb-5 flex items-center gap-4 border border-orange-100">
+          <div className="text-4xl">⭐</div>
+          <div>
+            <div className="text-2xl font-bold text-orange-500">
+              {groupTotalStamps}
+              <span className="text-base font-normal text-orange-400 ml-1">スタンプ</span>
+            </div>
+            <div className="text-xs text-gray-500">グループ全体の{displayMonth}合計</div>
+          </div>
+          <div className="ml-auto flex gap-2">
+            {[...goalsByUser.entries()].map(([uid, d]) => (
+              d.achievedToday ? (
+                <span key={uid} title={memberNameMap.get(uid)} className="text-xl">
+                  ✅
+                </span>
+              ) : null
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── マイルストーンバナー ─── */}
+      <MilestoneBanner milestones={milestones} />
+
+      {/* ─── グループチャレンジ ─── */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3 px-1">
           <h2 className="font-bold text-gray-700">🤝 グループチャレンジ</h2>
@@ -197,7 +331,7 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
         )}
       </div>
 
-      {/* ─── メンバーごとの個人目標 ─── */}
+      {/* ─── 個人目標 ─── */}
       <div>
         <h2 className="font-bold text-gray-700 mb-3 px-1">📋 個人目標</h2>
         {sortedMembers.map((gm) => {
@@ -223,6 +357,9 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
           );
         })}
       </div>
+
+      {/* ─── アクティビティフィード ─── */}
+      <GroupActivityFeed items={recentActivities} />
     </div>
   );
 }

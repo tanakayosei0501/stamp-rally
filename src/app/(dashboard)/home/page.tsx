@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import GoalStampCard from "@/components/goals/GoalStampCard";
+import GrowingPlant from "@/components/home/GrowingPlant";
 import type { Achievement } from "@/types/database";
 
 export default async function HomePage() {
@@ -19,7 +20,6 @@ export default async function HomePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // グループ名も一緒に取得（グループチャレンジのバッジ表示用）
   const { data: goals } = await supabase
     .from("goals")
     .select("*, achievements(*), groups(name)")
@@ -27,10 +27,32 @@ export default async function HomePage() {
     .eq("user_id", user?.id ?? "")
     .order("created_at", { ascending: true });
 
+  // ── 植物キャラクターに渡す数値を計算 ──
   const totalStamps = goals?.reduce(
     (sum, g) => sum + ((g.achievements as Achievement[])?.filter((a) => a.achieved).length ?? 0),
     0
   ) ?? 0;
+
+  const today = now.getDate();
+  const totalPossible = (goals?.length ?? 0) * today;
+  const achievementRate = totalPossible > 0
+    ? Math.min(100, Math.round((totalStamps / totalPossible) * 100))
+    : 0;
+
+  const allAchievedDates = goals?.flatMap((g) =>
+    (g.achievements as Achievement[]).filter((a) => a.achieved).map((a) => a.date)
+  ) ?? [];
+  const lastAchievedDate = [...allAchievedDates].sort((a, b) => b.localeCompare(a))[0] ?? null;
+  const daysSinceLastAchievement = lastAchievedDate
+    ? Math.floor(
+        (new Date(todayStr + "T00:00:00").getTime() - new Date(lastAchievedDate + "T00:00:00").getTime()) /
+          86_400_000
+      )
+    : -1;
+
+  const todayAchieved = goals?.some((g) =>
+    (g.achievements as Achievement[]).some((a) => a.date === todayStr && a.achieved)
+  ) ?? false;
 
   return (
     <div>
@@ -39,6 +61,16 @@ export default async function HomePage() {
         <p className="text-sm text-gray-500">{displayMonth}</p>
       </div>
 
+      {/* ─── 成長する植物キャラクター ─── */}
+      {goals && goals.length > 0 && (
+        <GrowingPlant
+          achievementRate={achievementRate}
+          daysSinceLastAchievement={daysSinceLastAchievement}
+          todayAchieved={todayAchieved}
+          totalStamps={totalStamps}
+        />
+      )}
+
       {goals && goals.length > 0 && (
         <div className="grid grid-cols-2 gap-3 mb-5">
           <div className="bg-orange-50 rounded-2xl p-4 text-center">
@@ -46,7 +78,9 @@ export default async function HomePage() {
             <div className="text-xs text-gray-500 mt-0.5">今月の目標</div>
           </div>
           <div className="bg-yellow-50 rounded-2xl p-4 text-center">
-            <div className="text-3xl font-bold text-yellow-500">{totalStamps}<span className="text-xl ml-1">⭐</span></div>
+            <div className="text-3xl font-bold text-yellow-500">
+              {totalStamps}<span className="text-xl ml-1">⭐</span>
+            </div>
             <div className="text-xs text-gray-500 mt-0.5">獲得スタンプ</div>
           </div>
         </div>
