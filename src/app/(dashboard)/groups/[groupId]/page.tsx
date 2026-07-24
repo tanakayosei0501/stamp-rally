@@ -8,7 +8,9 @@ import GroupChallengeCard from "@/components/groups/GroupChallengeCard";
 import GroupChallengeModal from "@/components/groups/GroupChallengeModal";
 import MilestoneBanner from "@/components/groups/MilestoneBanner";
 import GroupActivityFeed from "@/components/groups/GroupActivityFeed";
+import GroupBadges from "@/components/groups/GroupBadges";
 import type { Achievement, Reaction, Comment } from "@/types/database";
+import type { BadgeInfo, MvpInfo } from "@/components/groups/GroupBadges";
 import type { CommentWithProfile } from "@/components/groups/GroupGoalCard";
 import type { ActivityItem } from "@/components/groups/GroupActivityFeed";
 
@@ -240,6 +242,76 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
   activityItems.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const recentActivities = activityItems.slice(0, 5);
 
+  // ─── STEP A: MVP・バッジ ───
+  const stampRanking = [...goalsByUser.entries()]
+    .map(([uid, d]) => ({ uid, name: memberNameMap.get(uid) ?? "?", stamps: d.stamps }))
+    .sort((a, b) => b.stamps - a.stamps);
+
+  const mvp: MvpInfo | null =
+    stampRanking.length > 0 && stampRanking[0].stamps > 0
+      ? { name: stampRanking[0].name, stamps: stampRanking[0].stamps, isMe: stampRanking[0].uid === user.id }
+      : null;
+
+  const badges: BadgeInfo[] = [];
+
+  // ⭐ スタンプ王（複数メンバーがいて最多の人）
+  if (mvp && memberIds.length > 1) {
+    badges.push({ icon: "⭐", label: "スタンプ王", holder: mvp.name, color: "bg-yellow-100 text-yellow-800" });
+  }
+
+  // 🔥 連続の鬼（最長ストリーク 7日以上）
+  const topStreak = milestones[0];
+  if (topStreak?.streak >= 7) {
+    badges.push({ icon: "🔥", label: `${topStreak.streak}日連続達成`, holder: topStreak.name, color: "bg-orange-100 text-orange-800" });
+  }
+
+  // 👏 応援上手（リアクション＋コメント合計 3件以上の最多者）
+  const cheerCount = new Map<string, number>();
+  for (const r of allReactions as Reaction[]) {
+    cheerCount.set(r.user_id, (cheerCount.get(r.user_id) ?? 0) + 1);
+  }
+  for (const c of allComments) {
+    cheerCount.set(c.user_id, (cheerCount.get(c.user_id) ?? 0) + 1);
+  }
+  const topCheer = [...cheerCount.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (topCheer && topCheer[1] >= 3) {
+    badges.push({
+      icon: "👏",
+      label: `応援上手（${topCheer[1]}回）`,
+      holder: memberNameMap.get(topCheer[0]) ?? "?",
+      color: "bg-blue-100 text-blue-800",
+    });
+  }
+
+  // 🏆 皆勤賞（全目標を今日まで毎日達成, 5日以上経過）
+  if (isCurrentMonth) {
+    const elapsedDay = parseInt(todayStr.split("-")[2]);
+    if (elapsedDay >= 5) {
+      for (const [uid, data] of goalsByUser) {
+        if (data.goals.length === 0) continue;
+        const totalPossible = data.goals.length * elapsedDay;
+        if (data.stamps >= totalPossible) {
+          badges.push({ icon: "🏆", label: "皆勤賞", holder: memberNameMap.get(uid) ?? "?", color: "bg-purple-100 text-purple-800" });
+          break;
+        }
+      }
+    }
+  }
+
+  // 💎 レアハンター（レアスタンプ保有者）
+  const rareHolders: string[] = [];
+  for (const goal of personalGoals) {
+    for (const ach of goal.achievements as Achievement[]) {
+      if (ach.achieved && ach.is_rare) {
+        const name = memberNameMap.get(goal.user_id);
+        if (name && !rareHolders.includes(name)) rareHolders.push(name);
+      }
+    }
+  }
+  if (rareHolders.length > 0) {
+    badges.push({ icon: "💎", label: "レアハンター", holder: rareHolders.join("・"), color: "bg-pink-100 text-pink-800" });
+  }
+
   const displayMonth = (() => {
     const [y, m] = targetMonth.split("-");
     return `${y}年${parseInt(m)}月`;
@@ -293,6 +365,9 @@ export default async function GroupDetailPage({ params, searchParams }: Props) {
 
       {/* ─── マイルストーンバナー ─── */}
       <MilestoneBanner milestones={milestones} />
+
+      {/* ─── MVP・バッジ ─── */}
+      <GroupBadges mvp={mvp} badges={badges} />
 
       {/* ─── グループチャレンジ ─── */}
       <div className="mb-8">

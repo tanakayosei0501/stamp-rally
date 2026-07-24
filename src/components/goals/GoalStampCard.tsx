@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toggleAchievement } from "@/app/(dashboard)/home/actions";
 import { CATEGORIES } from "@/lib/categories";
+import { STAMP_EMOJI } from "@/lib/shopItems";
 import type { Goal, Achievement } from "@/types/database";
+
+// ─── ユーティリティ ───────────────────────────────────────────
 
 function toDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// その日時点での連続達成日数を計算（スタンプティア判定に使用）
 function calcStreakAt(achieved: Set<string>, dateStr: string): number {
   if (!achieved.has(dateStr)) return 0;
   let count = 0;
@@ -23,10 +25,13 @@ function calcStreakAt(achieved: Set<string>, dateStr: string): number {
   return count;
 }
 
-// 今日から遡る連続日数
-function calcStreak(achieved: Set<string>, fromDate: string): number {
-  return calcStreakAt(achieved, fromDate);
+// ボーナスデー: 毎月 7・14・21・28 日
+const BONUS_DAYS = new Set([7, 14, 21, 28]);
+function isBonusDay(dateStr: string): boolean {
+  return BONUS_DAYS.has(parseInt(dateStr.split("-")[2]));
 }
+
+// ─── スタンプティア ───────────────────────────────────────────
 
 type Tier = "gold" | "silver" | "normal";
 
@@ -36,55 +41,80 @@ function getTier(streakAt: number): Tier {
   return "normal";
 }
 
-// ティア別スタイル
-const TIER_STYLE: Record<Tier, { cell: string; emoji: string; textSize: string }> = {
-  gold:   { cell: "bg-gradient-to-br from-amber-100 to-yellow-200 ring-1 ring-amber-400", emoji: "⭐", textSize: "text-lg" },
-  silver: { cell: "bg-gradient-to-br from-slate-100 to-gray-200 ring-1 ring-slate-300",  emoji: "⭐", textSize: "text-base" },
-  normal: { cell: "",                                                                       emoji: "⭐", textSize: "text-base" },
+const TIER_CELL: Record<Tier, string> = {
+  gold:   "bg-gradient-to-br from-amber-100 to-yellow-200 ring-1 ring-amber-400",
+  silver: "bg-gradient-to-br from-slate-100 to-gray-200 ring-1 ring-slate-300",
+  normal: "",
 };
+
+// レアスタンプのセルスタイル（ティアより優先）
+const RARE_CELL = "bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 ring-2 ring-purple-400 ring-offset-1";
+
+// 祝福バナーの種類
+type CelebrationType = "normal" | "bonus" | "rare" | "bonus-rare";
+
+const CELEBRATION: Record<CelebrationType, { text: string; cls: string }> = {
+  "normal":     { text: "🎉 やったー！すごい！",         cls: "from-yellow-400 to-orange-400" },
+  "bonus":      { text: "🎁 ボーナスデー達成！ラッキー！", cls: "from-green-400 to-teal-400" },
+  "rare":       { text: "🌈 レアスタンプ！幸運だ！",      cls: "from-pink-500 to-purple-500" },
+  "bonus-rare": { text: "🌈🎁 Wラッキー！！最高！！",     cls: "from-purple-500 via-pink-400 to-yellow-400" },
+};
+
+// ─── Props ────────────────────────────────────────────────────
 
 type Props = {
   goal: Goal;
   achievements: Achievement[];
   todayStr: string;
   groupName?: string;
+  activeStamp?: string;
 };
 
-export default function GoalStampCard({ goal, achievements, todayStr, groupName }: Props) {
+// ─── コンポーネント ────────────────────────────────────────────
+
+export default function GoalStampCard({ goal, achievements, todayStr, groupName, activeStamp = "default" }: Props) {
   const router = useRouter();
+
+  // 達成済み日付の Set
   const [achieved, setAchieved] = useState(
     () => new Set(achievements.filter((a) => a.achieved).map((a) => a.date))
   );
-  const [celebrating, setCelebrating] = useState(false);
-  // 直前に押したセルの日付（インクリップルに使う）
+  // レアスタンプが出た日付の Set
+  const [rareSet, setRareSet] = useState(
+    () => new Set(achievements.filter((a) => a.achieved && a.is_rare).map((a) => a.date))
+  );
+
+  const [celebrating, setCelebrating] = useState<CelebrationType | null>(null);
   const [newlyStamped, setNewlyStamped] = useState<string | null>(null);
+  const [justGotRare, setJustGotRare]  = useState<string | null>(null);
 
   useEffect(() => {
     setAchieved(new Set(achievements.filter((a) => a.achieved).map((a) => a.date)));
+    setRareSet(new Set(achievements.filter((a) => a.achieved && a.is_rare).map((a) => a.date)));
   }, [achievements]);
 
-  const category = CATEGORIES.find((c) => c.value === goal.category);
-  const currentMonth = todayStr.slice(0, 7);
+  const category       = CATEGORIES.find((c) => c.value === goal.category);
+  const currentMonth   = todayStr.slice(0, 7);
   const isCurrentMonth = goal.target_month === currentMonth;
-  const todayAchieved = achieved.has(todayStr);
+  const todayAchieved  = achieved.has(todayStr);
 
-  const [year, month] = goal.target_month.split("-").map(Number);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDay = new Date(year, month - 1, 1).getDay();
-
-  const elapsedDays = isCurrentMonth ? parseInt(todayStr.slice(8, 10)) : daysInMonth;
-  const achievedCount = achieved.size;
-  const rate = elapsedDays > 0 ? Math.round((achievedCount / elapsedDays) * 100) : 0;
+  const [year, month]  = goal.target_month.split("-").map(Number);
+  const daysInMonth    = new Date(year, month, 0).getDate();
+  const firstDay       = new Date(year, month - 1, 1).getDay();
+  const elapsedDays    = isCurrentMonth ? parseInt(todayStr.slice(8, 10)) : daysInMonth;
+  const achievedCount  = achieved.size;
+  const rate           = elapsedDays > 0 ? Math.round((achievedCount / elapsedDays) * 100) : 0;
 
   const streakBaseDate = isCurrentMonth
     ? todayStr
     : `${goal.target_month}-${String(daysInMonth).padStart(2, "0")}`;
-  const streak = calcStreak(achieved, streakBaseDate);
+  const streak = calcStreakAt(achieved, streakBaseDate);
 
   async function handleToggle(dateStr: string) {
     if (dateStr > todayStr) return;
     const isAdding = !achieved.has(dateStr);
 
+    // 楽観的更新
     setAchieved((prev) => {
       const next = new Set(prev);
       if (next.has(dateStr)) next.delete(dateStr);
@@ -93,17 +123,39 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
     });
 
     if (isAdding) {
-      // インクリップル（スタンプを押した瞬間）
+      // 5% でレアスタンプ抽選（クライアント側）
+      const isRare = Math.random() < 0.05;
+
+      if (isRare) {
+        setRareSet((prev) => new Set([...prev, dateStr]));
+        setJustGotRare(dateStr);
+        setTimeout(() => setJustGotRare(null), 1200);
+      }
+
+      // インクリップル
       setNewlyStamped(dateStr);
       setTimeout(() => setNewlyStamped(null), 550);
+
       // 今日だけ祝福バナー
       if (dateStr === todayStr) {
-        setCelebrating(true);
-        setTimeout(() => setCelebrating(false), 1800);
+        const bonus = isBonusDay(dateStr);
+        const type: CelebrationType =
+          bonus && isRare ? "bonus-rare" : isRare ? "rare" : bonus ? "bonus" : "normal";
+        setCelebrating(type);
+        setTimeout(() => setCelebrating(null), 2200);
       }
+
+      await toggleAchievement(goal.id, dateStr, isRare);
+    } else {
+      // 削除時はレアSet からも除去
+      setRareSet((prev) => {
+        const next = new Set(prev);
+        next.delete(dateStr);
+        return next;
+      });
+      await toggleAchievement(goal.id, dateStr, false);
     }
 
-    await toggleAchievement(goal.id, dateStr);
     router.refresh();
   }
 
@@ -156,9 +208,9 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                 initial={{ scale: 0.85, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-yellow-400 to-orange-400 text-white font-bold text-center text-lg"
+                className={`w-full py-3 rounded-xl bg-gradient-to-r ${CELEBRATION[celebrating].cls} text-white font-bold text-center text-base`}
               >
-                🎉 やったー！すごい！
+                {CELEBRATION[celebrating].text}
               </motion.div>
             ) : todayAchieved ? (
               <motion.button
@@ -168,7 +220,8 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                 onClick={() => handleToggle(todayStr)}
                 className="w-full py-3 rounded-xl bg-green-50 border-2 border-green-300 text-green-600 font-bold flex items-center justify-center gap-2"
               >
-                <span className="text-xl">⭐</span>今日の達成を記録済み
+                <span className="text-xl">{rareSet.has(todayStr) ? "🌈" : (STAMP_EMOJI[activeStamp] ?? "⭐")}</span>
+                今日の達成を記録済み
               </motion.button>
             ) : (
               <motion.button
@@ -177,14 +230,15 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                 onClick={() => handleToggle(todayStr)}
                 className="w-full py-3 rounded-xl bg-orange-400 hover:bg-orange-500 active:bg-orange-600 text-white font-bold flex items-center justify-center gap-2 transition-colors shadow-md shadow-orange-200"
               >
-                <span className="text-xl">🎯</span>今日達成した！
+                <span className="text-xl">{isBonusDay(todayStr) ? "🎁" : "🎯"}</span>
+                {isBonusDay(todayStr) ? "ボーナスデー！今日達成した！" : "今日達成した！"}
               </motion.button>
             )}
           </AnimatePresence>
         </div>
       )}
 
-      {/* ── スタンプカレンダー（スタンプ帳風の台紙） ── */}
+      {/* ── スタンプカレンダー（スタンプ帳風） ── */}
       <div className="px-4 pb-4">
         <div className="bg-amber-50 rounded-xl p-2 border border-amber-100/80">
           {/* 曜日ヘッダー */}
@@ -205,14 +259,22 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
           <div className="grid grid-cols-7 gap-0.5">
             {Array.from({ length: firstDay }).map((_, i) => <div key={`b${i}`} />)}
             {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
-              const dateStr = `${goal.target_month}-${String(day).padStart(2, "0")}`;
+              const dateStr   = `${goal.target_month}-${String(day).padStart(2, "0")}`;
               const isAchieved = achieved.has(dateStr);
+              const isRare    = rareSet.has(dateStr);
               const isToday   = dateStr === todayStr;
               const isFuture  = dateStr > todayStr;
+              const isBonus   = isBonusDay(dateStr);
 
               const streakAt = isAchieved ? calcStreakAt(achieved, dateStr) : 0;
-              const tier = getTier(streakAt);
-              const { cell: cellCls, emoji, textSize } = TIER_STYLE[tier];
+              const tier     = getTier(streakAt);
+
+              // セルの背景（レア > ゴールド > シルバー > 通常）
+              const cellCls = isAchieved
+                ? isRare
+                  ? RARE_CELL
+                  : TIER_CELL[tier]
+                : "";
 
               return (
                 <button
@@ -220,7 +282,7 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                   onClick={() => handleToggle(dateStr)}
                   disabled={isFuture}
                   className={[
-                    "aspect-square flex items-center justify-center rounded-lg text-xs relative",
+                    "aspect-square flex items-center justify-center rounded-lg text-xs relative overflow-visible",
                     "transition-all active:scale-90",
                     isFuture ? "opacity-20 cursor-not-allowed" : "cursor-pointer",
                     !isAchieved && !isFuture ? "hover:bg-orange-100" : "",
@@ -228,7 +290,12 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                     cellCls,
                   ].join(" ")}
                 >
-                  {/* ── インクにじみリップル ── */}
+                  {/* ボーナスデー予告マーカー（未達成） */}
+                  {isBonus && !isAchieved && !isFuture && (
+                    <span className="absolute top-0 right-0.5 text-[7px] leading-none">🎁</span>
+                  )}
+
+                  {/* インクにじみリップル */}
                   <AnimatePresence>
                     {newlyStamped === dateStr && (
                       <motion.div
@@ -237,23 +304,48 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                         animate={{ scale: 3.0, opacity: 0 }}
                         exit={{}}
                         transition={{ duration: 0.5, ease: "easeOut" }}
-                        className="absolute inset-0 rounded-full bg-orange-300 pointer-events-none"
+                        className="absolute inset-0 rounded-full pointer-events-none"
+                        style={{ backgroundColor: isRare ? "#e879f9" : "#fb923c" }}
                       />
                     )}
                   </AnimatePresence>
 
-                  {/* ── スタンプ本体 ── */}
+                  {/* レアスタンプのパーティクルバースト */}
+                  <AnimatePresence>
+                    {justGotRare === dateStr &&
+                      [0, 60, 120, 180, 240, 300].map((deg) => (
+                        <motion.span
+                          key={`p${deg}`}
+                          initial={{ x: 0, y: 0, scale: 0.6, opacity: 1 }}
+                          animate={{
+                            x: Math.cos((deg * Math.PI) / 180) * 26,
+                            y: Math.sin((deg * Math.PI) / 180) * 26,
+                            scale: 0,
+                            opacity: 0,
+                          }}
+                          exit={{}}
+                          transition={{ duration: 0.75, ease: "easeOut" }}
+                          className="absolute text-[9px] pointer-events-none z-20 select-none"
+                        >
+                          ✨
+                        </motion.span>
+                      ))}
+                  </AnimatePresence>
+
+                  {/* スタンプ本体 */}
                   <AnimatePresence>
                     {isAchieved ? (
                       <motion.span
                         key="stamp"
-                        initial={{ scale: 1.7, rotate: -14, y: -5, opacity: 0.7 }}
+                        initial={{ scale: 1.7, rotate: isRare ? 15 : -14, y: -5, opacity: 0.7 }}
                         animate={{ scale: 1, rotate: tier === "gold" ? 2 : 0, y: 0, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0, rotate: 10 }}
                         transition={{ type: "spring", stiffness: 480, damping: 13 }}
-                        className={`${textSize} leading-none select-none relative z-10`}
+                        className={`leading-none select-none relative z-10 ${
+                          tier === "gold" || isRare ? "text-lg" : "text-base"
+                        }`}
                       >
-                        {emoji}
+                        {isRare ? "🌈" : (STAMP_EMOJI[activeStamp] ?? "⭐")}
                       </motion.span>
                     ) : (
                       <span className={`select-none text-xs ${isToday ? "font-bold text-orange-500" : "text-gray-300"}`}>
@@ -262,12 +354,23 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
                     )}
                   </AnimatePresence>
 
-                  {/* 金スタンプのきらめき */}
-                  {isAchieved && tier === "gold" && (
+                  {/* ゴールドスタンプのきらめき */}
+                  {isAchieved && tier === "gold" && !isRare && (
                     <motion.span
                       className="absolute top-0 right-0.5 text-[7px] text-amber-400 leading-none"
                       animate={{ opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
                       transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    >
+                      ✦
+                    </motion.span>
+                  )}
+
+                  {/* レアスタンプのきらめき */}
+                  {isAchieved && isRare && (
+                    <motion.span
+                      className="absolute top-0 right-0.5 text-[7px] text-purple-400 leading-none"
+                      animate={{ opacity: [1, 0.2, 1], scale: [1, 1.5, 1], rotate: [0, 30, 0] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                     >
                       ✦
                     </motion.span>
@@ -277,14 +380,23 @@ export default function GoalStampCard({ goal, achievements, todayStr, groupName 
             })}
           </div>
 
-          {/* ティア説明（連続日数がある場合のみ） */}
-          {streak >= 7 && (
-            <div className="mt-2 text-center text-[10px] text-gray-400">
-              {streak >= 14
-                ? "💛 ゴールドスタンプ獲得中（14日以上連続）"
-                : "🌟 シルバースタンプ獲得中（7日以上連続）"}
-            </div>
-          )}
+          {/* ティア / ボーナスデー説明 */}
+          <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 px-0.5">
+            <span>
+              {[7, 14, 21, 28].map((d) => {
+                const ds = `${goal.target_month}-${String(d).padStart(2, "0")}`;
+                return ds <= todayStr ? null : (
+                  <span key={d}>🎁 {d}日</span>
+                );
+              }).filter(Boolean).slice(0, 2)}
+              {!isCurrentMonth && ""}
+            </span>
+            {streak >= 7 && (
+              <span>
+                {streak >= 14 ? "💛 ゴールドスタンプ中" : "🌟 シルバースタンプ中"}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

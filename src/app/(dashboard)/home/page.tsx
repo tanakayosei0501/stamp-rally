@@ -20,6 +20,15 @@ export default async function HomePage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // アクティブなスタンプ/キャラクターを取得
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("active_stamp, active_character")
+    .eq("id", user?.id ?? "")
+    .single();
+  const activeStamp     = profile?.active_stamp     ?? "default";
+  const activeCharacter = profile?.active_character ?? "plant";
+
   const { data: goals } = await supabase
     .from("goals")
     .select("*, achievements(*), groups(name)")
@@ -68,6 +77,7 @@ export default async function HomePage() {
           daysSinceLastAchievement={daysSinceLastAchievement}
           todayAchieved={todayAchieved}
           totalStamps={totalStamps}
+          activeCharacter={activeCharacter}
         />
       )}
 
@@ -112,6 +122,7 @@ export default async function HomePage() {
                 achievements={(goal.achievements as Achievement[]) ?? []}
                 todayStr={todayStr}
                 groupName={groupName}
+                activeStamp={activeStamp}
               />
             );
           })}

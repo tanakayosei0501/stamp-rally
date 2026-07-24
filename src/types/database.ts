@@ -8,6 +8,8 @@ export type Profile = {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  active_stamp: string;
+  active_character: string;
   created_at: string;
 };
 
@@ -42,6 +44,7 @@ export type Achievement = {
   goal_id: string;
   date: string; // 例: "2026-07-15"
   achieved: boolean;
+  is_rare: boolean;
   note: string | null;
   created_at: string;
 };

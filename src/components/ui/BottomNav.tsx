@@ -7,10 +7,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/home", icon: "🏠", label: "ホーム" },
-  { href: "/goals", icon: "🎯", label: "目標" },
-  { href: "/groups", icon: "👥", label: "グループ" },
-  { href: "/history", icon: "📅", label: "履歴" },
+  { href: "/home",    icon: "🏠", label: "ホーム"   },
+  { href: "/goals",   icon: "🎯", label: "目標"     },
+  { href: "/groups",  icon: "👥", label: "グループ" },
+  { href: "/history", icon: "📅", label: "履歴"     },
+  { href: "/shop",    icon: "🛍️", label: "ショップ" },
 ];
 
 export default function BottomNav() {
